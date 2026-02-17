@@ -32,8 +32,8 @@ const Object = () => {
     const [introSentence, setIntroSentence] = useState("");
     const [developerName, setDeveloperName] = useState("");
     const [developerLink, setDeveloperLink] = useState("");
-    const [instructionalResourcesUrl, setInstructionalResourcesUrl] = useState(""); //download url for the instructional resources zip file
-    const [fabricationGuideUrl, setFabricationGuideUrl] = useState(""); //download url for the fabrication guide zip file
+    const [instructionalResourcesUrl, setInstructionalResourcesUrl] = useState(""); 
+    const [fabricationGuideUrl, setFabricationGuideUrl] = useState(""); 
     const [primaryDiscipline, setPrimaryDiscipline] = useState("");
     const [secondaryDiscipline, setSecondaryDiscipline] = useState("");
     const [gradeLevels, setGradeLevels] = useState("");
@@ -61,7 +61,6 @@ const Object = () => {
     useEffect(() => {
         if(doi === "00000C144undefined") {
             setImgUrl("https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQI543PLIQIc4To-7vEaHXFBFHwChFBBbEOpQCI1saa02QuDiWz");
-            // console.log(imgUrl);
             setTitle("Horse Evolution");
             setIntroSentence("This dataset of fossil horse teeth published on <a href='https://www.morphosource.org/'> Morphosource </a> has been selected by Florida Museum scientists to help K12 students understand concepts related to horse evolution and climate change. ");
             setDesc("Three lessons have been developed in collaboration with science teachers that can be used with the 3D files provided.");
@@ -73,7 +72,12 @@ const Object = () => {
             setGradeLevels("10, 11, 12")
             setForumLink("https://forum.cadlibrary.org/t/horse-evolution/24");
         } else {
-            axios.get("https://dataverse.lib.virginia.edu/api/datasets/:persistentId/?persistentId=doi:10.18130/"+ dataverseDoi)
+            // Updated to use relative path and params object for correct encoding
+            axios.get("/api/datasets/:persistentId/", {
+                params: {
+                    persistentId: "doi:10.18130/" + dataverseDoi
+                }
+            })
             .then(object => {
 
                 //file metadata
@@ -81,15 +85,13 @@ const Object = () => {
                 let files = object.data.data.latestVersion.files
         
                 for (let i = 0; i < files.length; i++) {
-                    // console.log(files[i].label.toLowerCase().slice(-3))
                     if (files[i].label.toLowerCase().slice(-3) === "png" || files[i].label.toLowerCase().slice(-3) === "jpg" || files[i].label.toLowerCase().slice(-4) === "jpeg"){
                         imgID = files[i].dataFile.id
                     }
                 }
         
+                // Using relative path for image access
                 setImgUrl("https://dataverse.lib.virginia.edu/api/access/datafile/" + imgID);
-
-                console.log(object.data.data)
 
                 //change the citation api response to a dictionary
                 let citationBlock = object.data.data.latestVersion.metadataBlocks.citation.fields;
@@ -108,10 +110,6 @@ const Object = () => {
                     educationCADMetadata[key] = educationalCADBlock[i].value;
                 }
                 
-                // console.log(educationCADMetadata);
-
-                //console.log(citationMetadata);
-
                 if("notesText" in citationMetadata){
                     let forumLinkMetadata = citationMetadata["notesText"];
                     forumLinkMetadata = forumLinkMetadata.substring(forumLinkMetadata.indexOf("http"))
@@ -126,40 +124,32 @@ const Object = () => {
                         if("publicationURL" in publication){
                             setRelatedWorkAvailURL(true);
                             if("publicationCitation" in publication){
-                                // publication citation and url avail
                                 publications = [{title: publication.publicationCitation.value, url: publication.publicationURL.value}, ...publications];
                             } else {
-                                // only pub url available
                                 publications = [{title: publication.publicationURL.value, url: publication.publicationURL.value}, ...publications];
                             }
                         } else {
-                            // only pub citation avail
                             publications = [{title: publication.publicationCitation.value}, ...publications]
                         }
                         setRelatedWorks(publications);
                     })
-                    // console.log(relatedWorks)
                 }
 
                 //set the citation metadata fields
                 setTitle(citationMetadata["title"]);
 
                 if(citationMetadata["author"].length >= 2){
-                    // get all of the author values
                     let authorNames = [];
                     for(let i = 0; i < citationMetadata["author"].length; i++){
                         authorNames.push(citationMetadata["author"][i].authorName.value);
                     }
 
-                    // change the values in authorNames to be dictionarys (firstInitial and lastName)
                     for(let i = 0; i < authorNames.length; i++){
                         let currentAuthor = authorNames[i]
                         let authorLastName =  currentAuthor.substring(0, currentAuthor.indexOf(","));
                         let authorFirstInitial = currentAuthor.charAt(authorLastName.length + 2);
                         authorNames[i] = {firstInitial: authorFirstInitial, lastName: authorLastName}
                     }
-
-                    // construct authorsFormatted string
 
                     let authorsFormattedString = "";
                     for(let i = 0; i < authorNames.length - 2; i++){
@@ -184,11 +174,7 @@ const Object = () => {
                 setYear(publicationDate.substring(0, 4));
                 formatPubDate(publicationDate);
 
-                //set the educational cad metadata fields
-                //setting link to developer
                 if("externalContrib" in educationCADMetadata){
-                    // console.log(educationCADMetadata)
-                    // console.log(educationCADMetadata["externalContrib"][0])
                     if ("externalAgency" in educationCADMetadata["externalContrib"][0]){
                         setDeveloperName(educationCADMetadata["externalContrib"][0].externalAgency.value);
                     }
@@ -199,13 +185,8 @@ const Object = () => {
                     setHasDeveloper(true);
                 }
         
-                //set disciplines (secondary discipline may be optional)
                 setPrimaryDiscipline(educationCADMetadata['disciplines'][0].discipline.value)
-                // if(educationCADMetadata["discipline"].secondaryDiscipline != null){
-                //     setSecondaryDiscipline(educationCADMetadata["discipline"].secondaryDiscipline.value);
-                // }
                 
-                //set grade levels
                 let gradeLevels = educationCADMetadata["gradeLevel"];
                 let gradeLevelsStr = "";
                 let i;
@@ -215,14 +196,11 @@ const Object = () => {
                 gradeLevelsStr += gradeLevels[gradeLevels.length-1];
                 setGradeLevels(gradeLevelsStr);
                 
-                //set sample learning goals
                 if("sampleLearningGoals" in educationCADMetadata){
                     setHasSampleLearningGoals(true);
                     setSampleLearningGoals(educationCADMetadata["sampleLearningGoals"]);
-
                 }
                
-                //fabrication and learning packages
                 let instructionalID = -1
                 let fabricationID = -1
 
@@ -249,10 +227,9 @@ const Object = () => {
             .catch((error) => console.log("Error: ", error.stack));
         }
        
-    }, [])
+    }, [doi, dataverseDoi])
 
     const formatAuthors = (author) => {
-        //two authors
         if(author.includes("&")){
             let authors = [];
             authors = author.split(" & ");
@@ -270,7 +247,6 @@ const Object = () => {
     }
 
     const formatPubDate = (publicationDate) => {
-        
         let date = publicationDate.split("-");
         let year = date[0];
         let month = date[1];

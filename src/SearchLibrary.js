@@ -46,8 +46,6 @@ const SearchLibrary = () => {
     }
   }, [])
 
-
-
   const handleSubmit = (event) => {
     event.preventDefault();
     setSearchObjects([]);
@@ -56,12 +54,12 @@ const SearchLibrary = () => {
   }
 
   const pullFacets = async() => {
-    axios.get("https://dataverse.lib.virginia.edu/api/search?q=*&show_facets=true&subtree=CADLibrary")
+    // Relative path for Proxy
+    axios.get("/api/search?q=*&show_facets=true&subtree=CADLibrary")
     .then((response) => {
       let facets = response.data.data.facets[0];
       
       facets.fabEquipment_ss.labels.forEach(equipment => {
-        // console.log(Object.keys(equipment)[0])
         equipmentList =  [Object.keys(equipment)[0], ...equipmentList];
         equipmentList.forEach(equipment => {
           let words = equipment.split(" ")
@@ -72,7 +70,6 @@ const SearchLibrary = () => {
           formattedEquipmentList.push(updatedWord)
         })
 
-        
       formattedEquipmentList = [...new Set(formattedEquipmentList)]
       for (let i = 0; i < formattedEquipmentList.length; i++) {
         if(formattedEquipmentList[i].includes("3d Printer") || formattedEquipmentList[i].includes("3d Printer Optional")){
@@ -82,23 +79,21 @@ const SearchLibrary = () => {
 
         setFabEquipment(formattedEquipmentList);
       })
-      // console.log(fabEquipment)
     })
     .catch((error) => console.log("Error: ", error));
   }
 
   const pullAllCards = async() => {
-    //pull all dois
-    const mainGet = axios.get("https://dataverse.lib.virginia.edu/api/dataverses/CADLibrary/contents");
-    const scienceGet = axios.get("https://dataverse.lib.virginia.edu/api/dataverses/CADLibraryScience/contents");
-    const techGet = axios.get("https://dataverse.lib.virginia.edu/api/dataverses/CADLibraryTechnology/contents");
-    const engineeringGet = axios.get("https://dataverse.lib.virginia.edu/api/dataverses/CADLibraryEngineering/contents");
-    const mathGet = axios.get("https://dataverse.lib.virginia.edu/api/dataverses/CADLibraryMath/contents");
+    // Relative paths for Proxy
+    const mainGet = axios.get("/api/dataverses/CADLibrary/contents");
+    const scienceGet = axios.get("/api/dataverses/CADLibraryScience/contents");
+    const techGet = axios.get("/api/dataverses/CADLibraryTechnology/contents");
+    const engineeringGet = axios.get("/api/dataverses/CADLibraryEngineering/contents");
+    const mathGet = axios.get("/api/dataverses/CADLibraryMath/contents");
 
     setNoObjects(undefined);
     Promise.all([mainGet, scienceGet, techGet, engineeringGet, mathGet]).then((responses) => {
       let mainResp = responses[1]
-      // console.log(mainResp)
 
       for(var i = 0; i < mainResp.data.data.length; i += 1){
           if (mainResp.data.data[i].type === 'dataset') {
@@ -115,7 +110,12 @@ const SearchLibrary = () => {
       dois = Array.from(new Set(dois));
 
       dois.forEach(doi => {
-          axios.get("https://dataverse.lib.virginia.edu/api/datasets/:persistentId/?persistentId=doi:10.18130/"+ doi)
+          // Use params for DOI requests
+          axios.get("/api/datasets/:persistentId/", {
+            params: {
+                persistentId: "doi:10.18130/" + doi
+            }
+          })
           .then(object => {
               title = object.data.data.latestVersion.metadataBlocks.citation.fields[0].value;
               author = object.data.data.latestVersion.metadataBlocks.citation.fields[1].value[0].authorName.value;
@@ -130,7 +130,7 @@ const SearchLibrary = () => {
                   }
               }
 
-              imgUrl = "https://dataverse.lib.virginia.edu/api/access/datafile/" + imgID;
+              imgUrl = "/api/access/datafile/" + imgID;
 
               objects = [{imgUrl: imgUrl, title: title, author: author, desc: desc, doi: doi}, ...objects];
               let sortedObjects = objects.sort((obj1, obj2) => (obj1.title > obj2.title) ? 1 : (obj1.title < obj2.title) ? -1 : 0)
@@ -145,45 +145,60 @@ const SearchLibrary = () => {
   }
 
   const searchByPhrase = async() => {
-    // in case of empty search, return all
     if (searchTerm === "") {
       pullAllCards();
       setSearchPhrase(searchTerm);
       return;
     }
-    let axios_text = 'https://dataverse.lib.virginia.edu/api/search?type=dataset&per_page=30&subtree=CADLibrary&q="' + searchTerm + '"';
+    
+    let isSubtreeSearch = false;
+    let axios_text = "/api/search";
+    let queryParams = {
+        type: "dataset",
+        per_page: 30,
+        subtree: "CADLibrary",
+        q: `"${searchTerm}"`
+    };
+
     var search_math = searchTerm.toLowerCase() === "math";
     var search_tech = searchTerm.toLowerCase() === "tech";
+
     if (search_math) {
-      axios_text = "https://dataverse.lib.virginia.edu/api/dataverses/CADLibraryMath/contents";
+      axios_text = "/api/dataverses/CADLibraryMath/contents";
+      isSubtreeSearch = true;
     } else if (search_tech) {
-      axios_text = "https://dataverse.lib.virginia.edu/api/dataverses/CADLibraryTechnology/contents";
+      axios_text = "/api/dataverses/CADLibraryTechnology/contents";
+      isSubtreeSearch = true;
     }
+
     try {
         setNoObjects(undefined);
-        axios.get(axios_text)
+        // Use params object to handle query string correctly
+        axios.get(axios_text, !isSubtreeSearch ? { params: queryParams } : {})
         .then((response) => {
-          let axios_doi_text = "";
-          if (search_math || search_tech) {
+          if (isSubtreeSearch) {
             for (var i = 0; i < response.data.data.length; i += 1) {
               dois.push(response.data.data[i].identifier);
             }
             dois = Array.from(new Set(dois));
-            axios_doi_text = "https://dataverse.lib.virginia.edu/api/datasets/:persistentId/?persistentId=doi:10.18130/";
           } else {
             if (response.data.data.count_in_response === 0) {
-              objects = [];
-              setSearchObjects(objects);
+              setSearchObjects([]);
               searchByKeyword();
               return;
             }
             for(var i = 0; i < response.data.data.count_in_response; i += 1){
               dois.push(response.data.data.items[i].global_id);
             }
-            axios_doi_text = "https://dataverse.lib.virginia.edu/api/datasets/:persistentId/?persistentId=";
           }
+
           dois.forEach(doi => {
-            axios.get(axios_doi_text + doi)
+            const isGlobalId = doi.includes("doi:");
+            axios.get("/api/datasets/:persistentId/", {
+                params: {
+                    persistentId: isGlobalId ? doi : "doi:10.18130/" + doi
+                }
+            })
             .then(object => {
                 title = object.data.data.latestVersion.metadataBlocks.citation.fields[0].value;
                 author = object.data.data.latestVersion.metadataBlocks.citation.fields[1].value[0].authorName.value;
@@ -200,12 +215,7 @@ const SearchLibrary = () => {
 
                 imgUrl = "https://dataverse.lib.virginia.edu/api/access/datafile/" + imgID;
 
-                let doiIdentifier = "";
-                if (search_math || search_tech) {
-                  doiIdentifier = doi;
-                } else {
-                  doiIdentifier = doi.substring(13);
-                }
+                let doiIdentifier = isSubtreeSearch ? doi : doi.substring(13);
 
                 objects = [{imgUrl: imgUrl, title: title, author: author, desc: desc, doi: doiIdentifier}, ...objects];
                 let sortedObjects = objects.sort((obj1, obj2) => (obj1.title > obj2.title) ? 1 : (obj1.title < obj2.title) ? -1 : 0)
@@ -217,14 +227,11 @@ const SearchLibrary = () => {
           })
         })
     } catch(err) {
-        console.log("The following Data had an error")
-        console.log(err)
-        console.log("")
+        console.log("Error in searchByPhrase: ", err)
     }
   }
 
   const searchByKeyword = async() => {
-    // in case of empty search, return all
     if (searchTerm === "") {
       pullAllCards();
       setSearchPhrase(searchTerm);
@@ -232,11 +239,17 @@ const SearchLibrary = () => {
     }
     try {
       setNoObjects(undefined);
-      axios.get('https://dataverse.lib.virginia.edu/api/search?type=dataset&per_page=30&subtree=CADLibrary&q=' + searchTerm)
+      axios.get('/api/search', {
+          params: {
+              type: "dataset",
+              per_page: 30,
+              subtree: "CADLibrary",
+              q: searchTerm
+          }
+      })
       .then((response) => {
         if (response.data.data.count_in_response === 0) {
-          objects = [];
-          setSearchObjects(objects);
+          setSearchObjects([]);
           setNoObjects(true);
           return;
         }
@@ -246,7 +259,11 @@ const SearchLibrary = () => {
         }
         
         dois.forEach(doi => {
-          axios.get("https://dataverse.lib.virginia.edu/api/datasets/:persistentId/?persistentId=" + doi)
+          axios.get("/api/datasets/:persistentId/", {
+              params: {
+                  persistentId: doi
+              }
+          })
           .then(object => {
               title = object.data.data.latestVersion.metadataBlocks.citation.fields[0].value;
               author = object.data.data.latestVersion.metadataBlocks.citation.fields[1].value[0].authorName.value;
@@ -261,7 +278,7 @@ const SearchLibrary = () => {
                   }
               }
 
-              imgUrl = "https://dataverse.lib.virginia.edu/api/access/datafile/" + imgID;
+              imgUrl = "/api/access/datafile/" + imgID;
 
               let doiIdentifier = doi.substring(13);
 
@@ -275,35 +292,32 @@ const SearchLibrary = () => {
         })
       })
     } catch(err) {
-        console.log("The following Data had an error")
-        console.log(err)
-        console.log("")
+        console.log("Error in searchByKeyword: ", err)
     }
   }
 
   const pullAllCardsByFilter = async(filters) => {
     setFilters(filters);
+    let tempDois = [];
 
     filterObjects.forEach(filterObject => {
       if(filterObject.doi.length >= 13){
-        dois.push(filterObject.doi.substring(13));
+        tempDois.push(filterObject.doi.substring(13));
       } else {
-        dois.push(filterObject.doi);
+        tempDois.push(filterObject.doi);
       }
-
-      
     });
 
     let resultsFound = false;
     setNoObjects(undefined);
 
-    dois.forEach(doi => {
-      // console.log(doi);
-        axios.get("https://dataverse.lib.virginia.edu/api/datasets/:persistentId/?persistentId=doi:10.18130/"+ doi)
+    tempDois.forEach(doi => {
+        axios.get("/api/datasets/:persistentId/", {
+            params: {
+                persistentId: "doi:10.18130/" + doi
+            }
+        })
         .then(object => {
-
-          //gather all values from filter fields 
-          //change the educational cad api response to a dictionary
           let educationalCADBlock = object.data.data.latestVersion.metadataBlocks.educationalcad.fields;
           let educationCADMetadata = {};
           for(let i = 0; i < educationalCADBlock.length; i++){
@@ -311,9 +325,6 @@ const SearchLibrary = () => {
               educationCADMetadata[key] = educationalCADBlock[i].value;
           }
 
-          //console.log(educationCADMetadata)
-
-        
           let filterValueSubject = educationCADMetadata['disciplines'][0].discipline.value;
           let filterValuesFabEquipment = [];
           let filterValuesGrades = [];
@@ -325,12 +336,8 @@ const SearchLibrary = () => {
             filterValuesGrades.push(grade);
           })
           
-          //check to see if filters are met
-
-          // set to true if the filter subject matches or there is no subject selected
           let filtersSubjectMet = filters.includes(filterValueSubject) || (!filters.includes("Science") && !filters.includes("Technology") && !filters.includes("Engineering") && !filters.includes("Mathematics"));
 
-          // needs refactoring!!
           let selected = false;
           fabEquipment.forEach(equipment => {
              if(filters.includes(equipment)){
@@ -353,13 +360,8 @@ const SearchLibrary = () => {
             }
           })
 
-          //console.log(filtersSubjectMet)
-          //console.log(filtersFabEquipMet)
-          //console.log(filtersGradeMet)
-
           if(filtersSubjectMet && filtersFabEquipMet && filtersGradeMet){
             resultsFound = true;
-            //console.log("TRUE");
             title = object.data.data.latestVersion.metadataBlocks.citation.fields[0].value;
             author = object.data.data.latestVersion.metadataBlocks.citation.fields[1].value[0].authorName.value;
             desc = object.data.data.latestVersion.metadataBlocks.citation.fields[3].value[0].dsDescriptionValue.value;
@@ -373,13 +375,11 @@ const SearchLibrary = () => {
                 }
             }
 
-            imgUrl = "https://dataverse.lib.virginia.edu/api/access/datafile/" + imgID;
+            imgUrl = "/api/access/datafile/" + imgID;
 
             objects = [{imgUrl: imgUrl, title: title, author: author, desc: desc, doi: doi}, ...objects];
             let sortedObjects = objects.sort((obj1, obj2) => (obj1.title > obj2.title) ? 1 : (obj1.title < obj2.title) ? -1 : 0)
-            // console.log(sortedObjects);
             setSearchObjects(sortedObjects);
-            // console.log(searchObjects);
             setNoObjects(false);
           } else if (!resultsFound) {
             setNoObjects(true);
@@ -419,20 +419,17 @@ const SearchLibrary = () => {
 
   return (
     <div>
-      <body>
-        <div class="site">
-          <MainHeader input={searchTerm}  setInput={setSearchTerm} handleSubmit={handleSubmit} subject={"Library"} showComponent={showComponent} handleCheckboxChange={handleCheckboxChange} showFilter={true}></MainHeader>
-          <CategoryHeader></CategoryHeader>
-          <div id="page">
-            <div class={resultsDisplay}>
-                {showComponent && <div><FilterBar filters={filters} subjects={subjects} fabEquipment={fabEquipment} grades ={grades} onFilterChange={(handleFilterChange)}></FilterBar></div>}
-                <SearchResultDisplay loading={isLoading} searchObjects={searchObjects} searchPhrase={searchPhrase} cardDisplay={cardDisplay}></SearchResultDisplay>
-            </div>
-          </div>  
-        </div>
-      </body>
+      <div className="site">
+        <MainHeader input={searchTerm}  setInput={setSearchTerm} handleSubmit={handleSubmit} subject={"Library"} showComponent={showComponent} handleCheckboxChange={handleCheckboxChange} showFilter={true}></MainHeader>
+        <CategoryHeader></CategoryHeader>
+        <div id="page">
+          <div className={resultsDisplay}>
+              {showComponent && <div><FilterBar filters={filters} subjects={subjects} fabEquipment={fabEquipment} grades ={grades} onFilterChange={(handleFilterChange)}></FilterBar></div>}
+              <SearchResultDisplay loading={isLoading} searchObjects={searchObjects} searchPhrase={searchPhrase} cardDisplay={cardDisplay}></SearchResultDisplay>
+          </div>
+        </div>  
+      </div>
     </div>
-    
   );
 };
 

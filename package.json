@@ -1,6 +1,7 @@
 {
   "name": "maketolearn",
   "homepage": "https://cadlibrary.org",
+  "proxy": "https://dataverse.lib.virginia.edu",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
