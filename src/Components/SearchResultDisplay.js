@@ -15,7 +15,7 @@ const SearchResultDisplay = ({ loading, searchObjects, searchPhrase, cardDisplay
     return (
         <div>
             <div>
-                {searchPhrase ? <p>We couldn't find "{searchPhrase}," but you may be interested in these:</p> : <p> </p>}
+                {searchPhrase && searchObjects.length === 0 ? <p>We couldn't find "{searchPhrase}," but you may be interested in these:</p> : <p> </p>}
                 {oneResult ? <p>1 result</p> : loading ? <p>Loading...</p> : multResult ? <p>{objectsNum} results</p> : <p>No results found</p>}
                 <div class={cardDisplay}>
                     {searchObjects.map((object, i) => (
