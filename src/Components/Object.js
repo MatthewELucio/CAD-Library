@@ -52,10 +52,8 @@ const Object = () => {
     const [year, setYear] = useState("");
     const [pubDate, setPubDate] = useState("");
 
-    let doiPieces = [];
-    doiPieces.push(doi.substring(0, 2));
-    doiPieces.push(doi.substring(2));
-    let dataverseDoi = doiPieces[0] + "/" + doiPieces[1];
+    // FIX: Simplified DOI logic to avoid double-slashing
+    let dataverseDoi = doi.substring(0, 2) + "/" + doi.substring(2);
     let publications = [];
     
     useEffect(() => {
@@ -72,8 +70,8 @@ const Object = () => {
             setGradeLevels("10, 11, 12")
             setForumLink("https://forum.cadlibrary.org/t/horse-evolution/24");
         } else {
-            // Updated to use relative path and params object for correct encoding
-            axios.get("/api/datasets/:persistentId/", {
+            // FIX: Removed trailing slash from endpoint and added params object
+            axios.get("/api/datasets/:persistentId", {
                 params: {
                     persistentId: "doi:10.18130/" + dataverseDoi
                 }
@@ -90,8 +88,8 @@ const Object = () => {
                     }
                 }
         
-                // Using relative path for image access
-                setImgUrl("https://dataverse.lib.virginia.edu/api/access/datafile/" + imgID);
+                // FIX: Using relative path for image access via Proxy
+                setImgUrl("/api/access/datafile/" + imgID);
 
                 //change the citation api response to a dictionary
                 let citationBlock = object.data.data.latestVersion.metadataBlocks.citation.fields;
@@ -214,12 +212,14 @@ const Object = () => {
                 }
 
                 if(fabricationID != -1){
-                    setFabricationGuideUrl("https://dataverse.lib.virginia.edu/api/access/datafile/" + fabricationID);
+                    // FIX: Using relative path
+                    setFabricationGuideUrl("/api/access/datafile/" + fabricationID);
                     setFabAvail(true);
                 }
 
                 if(instructionalID != -1){
-                    setInstructionalResourcesUrl("https://dataverse.lib.virginia.edu/api/access/datafile/" + instructionalID);
+                    // FIX: Using relative path
+                    setInstructionalResourcesUrl("/api/access/datafile/" + instructionalID);
                     setInstructAvail(true);
                 }
                 

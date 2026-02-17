@@ -130,6 +130,7 @@ const SearchLibrary = () => {
                   }
               }
 
+              // RELATIVE PATH FIX
               imgUrl = "/api/access/datafile/" + imgID;
 
               objects = [{imgUrl: imgUrl, title: title, author: author, desc: desc, doi: doi}, ...objects];
@@ -213,7 +214,8 @@ const SearchLibrary = () => {
                     }
                 }
 
-                imgUrl = "https://dataverse.lib.virginia.edu/api/access/datafile/" + imgID;
+                // RELATIVE PATH FIX
+                imgUrl = "/api/access/datafile/" + imgID;
 
                 let doiIdentifier = isSubtreeSearch ? doi : doi.substring(13);
 
@@ -278,6 +280,7 @@ const SearchLibrary = () => {
                   }
               }
 
+              // RELATIVE PATH FIX
               imgUrl = "/api/access/datafile/" + imgID;
 
               let doiIdentifier = doi.substring(13);
@@ -375,6 +378,7 @@ const SearchLibrary = () => {
                 }
             }
 
+            // RELATIVE PATH FIX
             imgUrl = "/api/access/datafile/" + imgID;
 
             objects = [{imgUrl: imgUrl, title: title, author: author, desc: desc, doi: doi}, ...objects];

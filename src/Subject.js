@@ -22,13 +22,15 @@ const Subject = ({ subjectArg }) => {
   const grades = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
   const isLoading = noObjects === undefined;
 
-  // Normalizing "Mathematics" to "Math" for API subtrees
   const subjectCapitalized = subjectArg.toLowerCase() === "mathematics" 
     ? "Math" 
     : subjectArg.charAt(0).toUpperCase() + subjectArg.slice(1);
 
   // HELPER: Format response into card objects
   const formatDataset = (res, doi) => {
+    // Safety check: ensure response data exists
+    if (!res.data || !res.data.data) return null;
+
     const metadata = res.data.data.latestVersion.metadataBlocks.citation.fields;
     const files = res.data.data.latestVersion.files;
     
@@ -42,7 +44,8 @@ const Subject = ({ subjectArg }) => {
     });
 
     return {
-      imgUrl: imgFile ? `https://dataverse.lib.virginia.edu/api/access/datafile/${imgFile.dataFile.id}` : "https://via.placeholder.com/150",
+      // FIX: Use relative path for image to pass through proxy/vercel rewrite
+      imgUrl: imgFile ? `/api/access/datafile/${imgFile.dataFile.id}` : "https://via.placeholder.com/150",
       title,
       author,
       desc,
@@ -52,9 +55,10 @@ const Subject = ({ subjectArg }) => {
 
   const pullFacets = async () => {
     try {
-      // Using relative path for proxy
       const response = await axios.get("/api/search?q=*&show_facets=true&subtree=CADLibrary");
-      const facets = response.data.data.facets[0];
+      const facets = response.data?.data?.facets?.[0];
+      if (!facets) return;
+
       let formattedList = facets.fabEquipment_ss.labels.map(obj => {
         const name = Object.keys(obj)[0];
         return name.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -69,12 +73,15 @@ const Subject = ({ subjectArg }) => {
       const contents = await axios.get(`/api/dataverses/CADLibrary${subjectCapitalized}/contents`);
       const dois = contents.data.data.map(item => item.identifier);
       
-      const requests = dois.map(doi => axios.get(`/api/datasets/:persistentId/?persistentId=doi:10.18130/${doi}`));
+      // FIX: Use Axios params object for clean encoding of the DOI query
+      const requests = dois.map(doi => axios.get("/api/datasets/:persistentId", {
+        params: { persistentId: `doi:10.18130/${doi}` }
+      }));
+      
       const results = await Promise.all(requests);
+      const objects = results.map((r, i) => formatDataset(r, dois[i])).filter(x => x !== null);
       
-      const objects = results.map((r, i) => formatDataset(r, dois[i]));
       const sorted = objects.sort((a, b) => a.title.localeCompare(b.title));
-      
       setSearchObjects(sorted);
       setFilterObjects(sorted);
       setNoObjects(sorted.length === 0);
@@ -88,23 +95,38 @@ const Subject = ({ subjectArg }) => {
     if (!searchTerm) return pullAllCards();
     setNoObjects(undefined);
     try {
-      const searchRes = await axios.get(`/api/search?type=dataset&per_page=30&subtree=CADLibrary&q=${searchTerm}`);
+      const searchRes = await axios.get("/api/search", {
+        params: {
+          type: "dataset",
+          per_page: 30,
+          subtree: "CADLibrary",
+          q: `"${searchTerm}"`
+        }
+      });
+      
       const items = searchRes.data.data.items;
       
-      const requests = items.map(item => axios.get(`/api/datasets/:persistentId/?persistentId=${item.global_id}`));
+      // FIX: Handle Global ID encoding correctly
+      const requests = items.map(item => axios.get("/api/datasets/:persistentId", {
+        params: { persistentId: item.global_id }
+      }));
+
       const results = await Promise.all(requests);
-      
       const filtered = results
         .filter(r => {
             const fields = r.data.data.latestVersion.metadataBlocks.educationalcad.fields;
             const discipline = fields.find(f => f.typeName === "disciplines")?.value[0]?.discipline?.value;
             return discipline === subjectCapitalized;
         })
-        .map(r => formatDataset(r, r.data.data.persistentId));
+        .map(r => formatDataset(r, r.data.data.persistentId))
+        .filter(x => x !== null);
 
       setSearchObjects(filtered);
       setNoObjects(filtered.length === 0);
-    } catch (err) { console.error("Search Error:", err); setNoObjects(true); }
+    } catch (err) { 
+      console.error("Search Error:", err); 
+      setNoObjects(true); 
+    }
   };
 
   useEffect(() => {
@@ -122,11 +144,8 @@ const Subject = ({ subjectArg }) => {
     setFilters(filters);
     if(filters.length === 0) return searchByPhrase();
     
-    // In-memory filter for speed, since we already have filterObjects
-    const filtered = filterObjects.filter(obj => {
-        // Logic for filtering by tags (Requires metadata to be stored in filterObjects)
-        return true; 
-    });
+    // Simple filter placeholder
+    const filtered = filterObjects.filter(obj => true);
     setSearchObjects(filtered);
   };
 
